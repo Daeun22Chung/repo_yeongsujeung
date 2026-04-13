@@ -2,7 +2,11 @@
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
-    extend: {},
+    extend: {
+      screens: {
+        xs: '475px', // 모바일 가로 (iPhone Plus, Galaxy S 계열)
+      },
+    },
   },
   plugins: [],
 }

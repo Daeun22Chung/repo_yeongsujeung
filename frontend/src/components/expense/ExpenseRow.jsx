@@ -26,7 +26,7 @@ export default function ExpenseRow({ receipt, onDelete }) {
       </td>
       <td className="px-4 py-3 text-sm text-gray-600">{formatDate(receipt.date)}</td>
       <td className="px-4 py-3 text-sm font-medium text-gray-900">{receipt.store_name}</td>
-      <td className="px-4 py-3"><Badge category={receipt.category} /></td>
+      <td className="px-4 py-3 hidden sm:table-cell"><Badge category={receipt.category} /></td>
       <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">
         {formatCurrency(receipt.total_amount)}
       </td>

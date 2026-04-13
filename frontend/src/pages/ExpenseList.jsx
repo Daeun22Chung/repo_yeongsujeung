@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { receiptsApi } from '../api/receipts'
 import EmptyState from '../components/ui/EmptyState'
 import Pagination from '../components/ui/Pagination'
-import Spinner from '../components/ui/Spinner'
+import { SkeletonTableRows } from '../components/ui/Skeleton'
 import Modal from '../components/ui/Modal'
 import FilterBar from '../components/expense/FilterBar'
 import ExpenseTable from '../components/expense/ExpenseTable'
@@ -71,7 +71,7 @@ export default function ExpenseList() {
       />
 
       {loading ? (
-        <div className="flex justify-center py-16"><Spinner size={32} /></div>
+        <SkeletonTableRows rows={6} />
       ) : data.items.length === 0 ? (
         <EmptyState
           title="검색 결과가 없습니다"

@@ -5,7 +5,7 @@ import { receiptsApi } from '../api/receipts'
 import { statsApi } from '../api/stats'
 import Card from '../components/ui/Card'
 import EmptyState from '../components/ui/EmptyState'
-import Spinner from '../components/ui/Spinner'
+import { SkeletonCard, SkeletonPieChart, SkeletonTableRows } from '../components/ui/Skeleton'
 import ExpenseTable from '../components/expense/ExpenseTable'
 import CategoryPieChart from '../components/stats/CategoryPieChart'
 import { useToast } from '../context/ToastContext'
@@ -40,18 +40,11 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <Spinner size={36} />
-      </div>
-    )
-  }
-
   const categoryData = summary?.by_category ?? []
 
   return (
     <div className="space-y-6">
+      {/* 헤더 */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-gray-900">대시보드</h1>
         <button
@@ -59,25 +52,30 @@ export default function Dashboard() {
           className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
         >
           <Upload size={16} />
-          영수증 업로드
+          <span className="hidden sm:inline">영수증 업로드</span>
+          <span className="sm:hidden">업로드</span>
         </button>
       </div>
 
       {/* 이번 달 총 지출 */}
-      <Card className="p-6">
-        <p className="text-sm text-gray-500 mb-1">이번 달 총 지출</p>
-        <p className="text-3xl font-bold text-indigo-700">
-          {formatCurrency(summary?.total_amount ?? 0)}
-        </p>
-        <p className="mt-1 text-xs text-gray-400">
-          총 {summary?.count ?? 0}건
-        </p>
-      </Card>
+      {loading ? (
+        <SkeletonCard />
+      ) : (
+        <Card className="p-6">
+          <p className="text-sm text-gray-500 mb-1">이번 달 총 지출</p>
+          <p className="text-3xl font-bold text-indigo-700">
+            {formatCurrency(summary?.total_amount ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-gray-400">총 {summary?.count ?? 0}건</p>
+        </Card>
+      )}
 
       {/* 카테고리 파이 차트 */}
       <Card className="p-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">카테고리별 지출</h2>
-        {categoryData.length > 0 ? (
+        {loading ? (
+          <SkeletonPieChart />
+        ) : categoryData.length > 0 ? (
           <CategoryPieChart data={categoryData} />
         ) : (
           <EmptyState title="이번 달 지출 데이터가 없습니다" />
@@ -95,7 +93,9 @@ export default function Dashboard() {
             전체 보기
           </button>
         </div>
-        {recent.length > 0 ? (
+        {loading ? (
+          <SkeletonTableRows rows={3} />
+        ) : recent.length > 0 ? (
           <ExpenseTable receipts={recent} onDelete={() => {}} />
         ) : (
           <EmptyState

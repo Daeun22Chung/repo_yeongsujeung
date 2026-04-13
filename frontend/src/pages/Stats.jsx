@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { statsApi } from '../api/stats'
 import Card from '../components/ui/Card'
-import Spinner from '../components/ui/Spinner'
 import EmptyState from '../components/ui/EmptyState'
+import { SkeletonSummaryCards, SkeletonChart, SkeletonPieChart } from '../components/ui/Skeleton'
 import DateRangePicker from '../components/stats/DateRangePicker'
 import SummaryCards from '../components/stats/SummaryCards'
 import MonthlyBarChart from '../components/stats/MonthlyBarChart'
@@ -49,45 +49,48 @@ export default function Stats() {
         onChange={handleDateChange}
       />
 
+      {/* 요약 카드 */}
       {loading ? (
-        <div className="flex justify-center py-20"><Spinner size={36} /></div>
-      ) : !hasData ? (
-        <EmptyState
-          title="선택한 기간에 데이터가 없습니다"
-          description="기간을 변경하거나 영수증을 업로드해보세요"
-        />
+        <SkeletonSummaryCards />
       ) : (
-        <>
-          <SummaryCards summary={summary} />
-
-          <Card className="p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">월별 총 지출</h2>
-            {summary.by_month?.length > 0 ? (
-              <MonthlyBarChart data={summary.by_month} />
-            ) : (
-              <EmptyState title="월별 데이터 없음" />
-            )}
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">일별 지출 추이</h2>
-            {summary.by_day?.length > 0 ? (
-              <DailyLineChart data={summary.by_day} />
-            ) : (
-              <EmptyState title="일별 데이터 없음" />
-            )}
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-4">카테고리별 지출</h2>
-            {summary.by_category?.length > 0 ? (
-              <CategoryPieChart data={summary.by_category} />
-            ) : (
-              <EmptyState title="카테고리 데이터 없음" />
-            )}
-          </Card>
-        </>
+        <SummaryCards summary={summary} />
       )}
+
+      {/* 월별 막대 차트 */}
+      <Card className="p-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">월별 총 지출</h2>
+        {loading ? (
+          <SkeletonChart height={260} />
+        ) : !hasData || !summary.by_month?.length ? (
+          <EmptyState title="월별 데이터 없음" />
+        ) : (
+          <MonthlyBarChart data={summary.by_month} />
+        )}
+      </Card>
+
+      {/* 일별 추이 */}
+      <Card className="p-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">일별 지출 추이</h2>
+        {loading ? (
+          <SkeletonChart height={240} />
+        ) : !hasData || !summary.by_day?.length ? (
+          <EmptyState title="일별 데이터 없음" />
+        ) : (
+          <DailyLineChart data={summary.by_day} />
+        )}
+      </Card>
+
+      {/* 카테고리 파이 */}
+      <Card className="p-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">카테고리별 지출</h2>
+        {loading ? (
+          <SkeletonPieChart />
+        ) : !hasData || !summary.by_category?.length ? (
+          <EmptyState title="카테고리 데이터 없음" />
+        ) : (
+          <CategoryPieChart data={summary.by_category} />
+        )}
+      </Card>
     </div>
   )
 }
