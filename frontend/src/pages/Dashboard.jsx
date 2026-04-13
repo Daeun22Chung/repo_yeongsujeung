@@ -1,4 +1,4 @@
-import { Upload } from 'lucide-react'
+import { Upload, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { receiptsApi } from '../api/receipts'
@@ -23,10 +23,13 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { addToast } = useToast()
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [summary, setSummary] = useState(null)
   const [recent, setRecent] = useState([])
 
-  useEffect(() => {
+  function load() {
+    setLoading(true)
+    setError(null)
     const { start, end } = thisMonthRange()
     Promise.all([
       statsApi.getSummary({ start_date: start, end_date: end }),
@@ -36,9 +39,14 @@ export default function Dashboard() {
         setSummary(statsRes.data?.data ?? statsRes.data)
         setRecent(listRes.data?.data?.items ?? listRes.data?.items ?? [])
       })
-      .catch(() => addToast('데이터를 불러오지 못했습니다.', 'error'))
+      .catch((err) => {
+        setError(err.message ?? '데이터를 불러오지 못했습니다.')
+        addToast('데이터를 불러오지 못했습니다.', 'error')
+      })
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { load() }, [])
 
   const categoryData = summary?.by_category ?? []
 
@@ -56,6 +64,16 @@ export default function Dashboard() {
           <span className="sm:hidden">업로드</span>
         </button>
       </div>
+
+      {/* 네트워크 오류 배너 */}
+      {!loading && error && (
+        <div className="flex items-center justify-between rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
+          <span>{error}</span>
+          <button onClick={load} className="flex items-center gap-1.5 font-medium hover:text-rose-900">
+            <RefreshCw size={14} /> 다시 시도
+          </button>
+        </div>
+      )}
 
       {/* 이번 달 총 지출 */}
       {loading ? (

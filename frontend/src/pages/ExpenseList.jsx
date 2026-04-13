@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useReceipts } from '../hooks/useReceipts'
 import { receiptsApi } from '../api/receipts'
 import EmptyState from '../components/ui/EmptyState'
 import Pagination from '../components/ui/Pagination'
@@ -10,36 +11,13 @@ import ExpenseTable from '../components/expense/ExpenseTable'
 import { useToast } from '../context/ToastContext'
 import Button from '../components/ui/Button'
 
-const INIT_FILTERS = { date_from: '', date_to: '', category: '', store_name: '' }
-
 export default function ExpenseList() {
   const navigate = useNavigate()
   const { addToast } = useToast()
-  const [filters, setFilters] = useState(INIT_FILTERS)
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState({ items: [], total: 0, total_pages: 1 })
+  const { data, loading, error, filters, page, setPage, changeFilter, resetFilters, refetch } =
+    useReceipts(20)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
-
-  useEffect(() => {
-    setLoading(true)
-    const params = { ...filters, page, per_page: 20 }
-    Object.keys(params).forEach((k) => !params[k] && delete params[k])
-    receiptsApi
-      .getList(params)
-      .then((res) => {
-        const d = res.data?.data ?? res.data
-        setData({ items: d.items ?? [], total: d.total ?? 0, total_pages: d.total_pages ?? 1 })
-      })
-      .catch(() => addToast('목록을 불러오지 못했습니다.', 'error'))
-      .finally(() => setLoading(false))
-  }, [filters, page])
-
-  function handleFilterChange(key, val) {
-    setFilters((prev) => ({ ...prev, [key]: val }))
-    setPage(1)
-  }
 
   async function handleDelete() {
     if (!deleteTarget) return
@@ -48,8 +26,7 @@ export default function ExpenseList() {
       await receiptsApi.remove(deleteTarget.id)
       addToast('삭제됐습니다.', 'success')
       setDeleteTarget(null)
-      setPage(1)
-      setFilters({ ...INIT_FILTERS })
+      refetch()
     } catch (err) {
       addToast(err.message, 'error')
     } finally {
@@ -64,14 +41,18 @@ export default function ExpenseList() {
         <Button onClick={() => navigate('/upload')}>+ 업로드</Button>
       </div>
 
-      <FilterBar
-        filters={filters}
-        onChange={handleFilterChange}
-        onReset={() => { setFilters(INIT_FILTERS); setPage(1) }}
-      />
+      <FilterBar filters={filters} onChange={changeFilter} onReset={resetFilters} />
 
       {loading ? (
         <SkeletonTableRows rows={6} />
+      ) : error ? (
+        <EmptyState
+          title="목록을 불러오지 못했습니다"
+          description={error}
+          action={
+            <Button variant="secondary" onClick={refetch}>다시 시도</Button>
+          }
+        />
       ) : data.items.length === 0 ? (
         <EmptyState
           title="검색 결과가 없습니다"

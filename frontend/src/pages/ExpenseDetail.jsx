@@ -1,9 +1,9 @@
-import { ArrowLeft } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { receiptsApi } from '../api/receipts'
+import { useReceipt } from '../hooks/useReceipts'
 import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
+import Button from '../components/ui/Button'
 import ImageViewer from '../components/expense/ImageViewer'
 import ExpenseForm from '../components/expense/ExpenseForm'
 import { useToast } from '../context/ToastContext'
@@ -12,28 +12,15 @@ export default function ExpenseDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { addToast } = useToast()
-  const [receipt, setReceipt] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    receiptsApi
-      .getById(id)
-      .then((res) => setReceipt(res.data?.data ?? res.data))
-      .catch(() => addToast('영수증을 불러오지 못했습니다.', 'error'))
-      .finally(() => setLoading(false))
-  }, [id])
+  const { receipt, loading, saving, error, update } = useReceipt(id)
 
   async function handleSave(payload) {
-    setSaving(true)
-    try {
-      await receiptsApi.update(id, payload)
+    const result = await update(payload)
+    if (result.ok) {
       addToast('저장됐습니다.', 'success')
       navigate('/expenses')
-    } catch (err) {
-      addToast(err.message, 'error')
-    } finally {
-      setSaving(false)
+    } else {
+      addToast(result.message || '저장에 실패했습니다.', 'error')
     }
   }
 
@@ -45,8 +32,18 @@ export default function ExpenseDetail() {
     )
   }
 
-  if (!receipt) {
-    return <p className="text-center text-gray-400 py-20">영수증을 찾을 수 없습니다.</p>
+  if (error || !receipt) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+        <div className="rounded-full bg-rose-50 p-4">
+          <AlertTriangle size={32} className="text-rose-400" />
+        </div>
+        <p className="text-gray-600 font-medium">{error ?? '영수증을 찾을 수 없습니다.'}</p>
+        <Button variant="secondary" onClick={() => navigate(-1)}>
+          <ArrowLeft size={15} /> 뒤로
+        </Button>
+      </div>
+    )
   }
 
   return (
