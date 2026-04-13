@@ -1,5 +1,7 @@
+import asyncio
 import json
 import math
+import re
 from datetime import date
 from pathlib import Path
 
@@ -7,11 +9,18 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from database.models import Receipt, ReceiptItem
 from schemas import ReceiptUpdate
 
 
-async def create_receipt_from_ocr(db: AsyncSession, ocr_data: dict, image_path: str) -> Receipt:
+def _extract_cloudinary_public_id(url: str) -> str | None:
+    """Cloudinary URL에서 public_id 추출."""
+    match = re.search(r'/upload/(?:v\d+/)?(.+?)(?:\.\w+)?$', url)
+    return match.group(1) if match else None
+
+
+async def create_receipt_from_ocr(db: AsyncSession, ocr_data: dict, image_path: str | None) -> Receipt:
     receipt_date = ocr_data.get("date")
     if isinstance(receipt_date, str):
         from datetime import datetime
@@ -22,10 +31,23 @@ async def create_receipt_from_ocr(db: AsyncSession, ocr_data: dict, image_path: 
     else:
         receipt_date = date.today()
 
+    # 품목 소계 합산
+    items_data = ocr_data.get("items", [])
+    items_sum = sum(
+        int(it.get("quantity", 1)) * float(it.get("price", 0))
+        for it in items_data
+    )
+    ocr_total = float(ocr_data.get("total", 0))
+    if items_sum > 0 and ocr_total > 0:
+        ratio = abs(items_sum - ocr_total) / max(items_sum, ocr_total)
+        total_amount = ocr_total if ratio < 0.2 else items_sum
+    else:
+        total_amount = ocr_total or items_sum
+
     receipt = Receipt(
         store_name=ocr_data.get("store_name", "알 수 없음"),
         date=receipt_date,
-        total_amount=float(ocr_data.get("total", 0)),
+        total_amount=total_amount,
         category=ocr_data.get("category"),
         image_path=image_path,
         raw_json=json.dumps(ocr_data, ensure_ascii=False),
@@ -33,7 +55,7 @@ async def create_receipt_from_ocr(db: AsyncSession, ocr_data: dict, image_path: 
     db.add(receipt)
     await db.flush()
 
-    for item in ocr_data.get("items", []):
+    for item in items_data:
         qty = int(item.get("quantity", 1))
         price = float(item.get("price", 0))
         db.add(ReceiptItem(
@@ -45,8 +67,7 @@ async def create_receipt_from_ocr(db: AsyncSession, ocr_data: dict, image_path: 
         ))
 
     await db.commit()
-    await db.refresh(receipt)
-    return receipt
+    return await get_receipt(db, receipt.id)
 
 
 async def list_receipts(
@@ -113,8 +134,7 @@ async def update_receipt(db: AsyncSession, receipt_id: int, data: ReceiptUpdate)
             ))
 
     await db.commit()
-    await db.refresh(receipt)
-    return receipt
+    return await get_receipt(db, receipt_id)
 
 
 async def delete_receipt(db: AsyncSession, receipt_id: int) -> bool:
@@ -122,10 +142,22 @@ async def delete_receipt(db: AsyncSession, receipt_id: int) -> bool:
     if not receipt:
         return False
 
-    # 이미지 파일 삭제
     if receipt.image_path:
-        p = Path(receipt.image_path)
-        if p.exists():
+        if receipt.image_path.startswith("http"):
+            # Cloudinary 이미지 삭제
+            if settings.use_cloudinary:
+                public_id = _extract_cloudinary_public_id(receipt.image_path)
+                if public_id:
+                    try:
+                        import cloudinary.uploader
+                        await asyncio.to_thread(
+                            cloudinary.uploader.destroy, public_id, resource_type="image"
+                        )
+                    except Exception:
+                        pass  # 이미지 삭제 실패해도 DB 레코드는 삭제
+        else:
+            # 로컬 파일 삭제
+            p = Path(settings.upload_dir) / Path(receipt.image_path).name
             p.unlink(missing_ok=True)
 
     await db.delete(receipt)

@@ -13,6 +13,17 @@ from api.routers import receipts, stats, categories
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+
+    # Cloudinary 전역 설정
+    if settings.use_cloudinary:
+        import cloudinary
+        cloudinary.config(
+            cloud_name=settings.cloudinary_cloud_name,
+            api_key=settings.cloudinary_api_key,
+            api_secret=settings.cloudinary_api_secret,
+            secure=True,
+        )
+
     yield
 
 
@@ -25,15 +36,24 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-upload_dir = Path(settings.upload_dir)
-upload_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
+# 로컬 개발 시에만 업로드 파일 정적 서빙 (Cloudinary 미사용 시)
+if not settings.use_cloudinary:
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
 
 app.include_router(receipts.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")

@@ -1,4 +1,7 @@
-import shutil
+import asyncio
+import os
+import re
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -16,6 +19,35 @@ ALLOWED_TYPES = {"image/jpeg", "image/png", "application/pdf"}
 MAX_SIZE = 10 * 1024 * 1024  # 10MB
 
 
+async def _save_to_cloud(content: bytes, filename: str) -> str:
+    """Cloudinary에 이미지 업로드 후 URL 반환."""
+    import cloudinary.uploader
+
+    ext = Path(filename).suffix.lstrip(".")
+    public_id = f"receipts/{Path(filename).stem}"
+
+    def _upload():
+        return cloudinary.uploader.upload(
+            content,
+            public_id=public_id,
+            resource_type="auto",
+            overwrite=True,
+        )
+
+    result = await asyncio.to_thread(_upload)
+    return result["secure_url"]
+
+
+async def _save_to_local(content: bytes, filename: str) -> str:
+    """로컬 uploads 디렉터리에 파일 저장 후 파일명 반환."""
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    save_path = upload_dir / filename
+    with open(save_path, "wb") as f:
+        f.write(content)
+    return filename
+
+
 @router.post("/upload")
 async def upload_receipt(
     file: UploadFile = File(...),
@@ -28,23 +60,35 @@ async def upload_receipt(
     if len(content) > MAX_SIZE:
         raise HTTPException(400, detail="파일 크기가 10MB를 초과합니다.")
 
-    # 파일 저장
-    upload_dir = Path(settings.upload_dir)
-    upload_dir.mkdir(parents=True, exist_ok=True)
     ext = Path(file.filename).suffix
     filename = f"{uuid.uuid4().hex}{ext}"
-    save_path = upload_dir / filename
 
-    with open(save_path, "wb") as f:
-        f.write(content)
+    # OCR용 임시 파일 저장 (/tmp - 서버리스 환경 포함)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
 
     try:
-        ocr_data = await ocr_service.analyze_receipt(str(save_path))
+        ocr_data = await ocr_service.analyze_receipt(tmp_path)
     except Exception as e:
-        save_path.unlink(missing_ok=True)
         raise HTTPException(500, detail=f"OCR 분석 실패: {str(e)}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
-    receipt = await receipt_service.create_receipt_from_ocr(db, ocr_data, str(save_path))
+    # 이미지 저장: Cloudinary 또는 로컬
+    try:
+        if settings.use_cloudinary:
+            image_path = await _save_to_cloud(content, filename)
+        else:
+            image_path = await _save_to_local(content, filename)
+    except Exception as e:
+        # 이미지 저장 실패해도 영수증 데이터는 저장 (image_path = None)
+        image_path = None
+
+    receipt = await receipt_service.create_receipt_from_ocr(db, ocr_data, image_path)
     return {"status": "success", "data": ReceiptOut.model_validate(receipt)}
 
 

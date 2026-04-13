@@ -15,7 +15,10 @@ export default function ImageViewer({ imagePath }) {
     )
   }
 
-  const src = `/uploads/${imagePath.split('/').pop()}`
+  // Cloudinary 등 절대 URL은 그대로, 파일명만 있으면 /uploads/ 경로로
+  const isAbsoluteUrl = imagePath.startsWith('http://') || imagePath.startsWith('https://')
+  const filename = imagePath.split(/[/\\]/).pop()
+  const src = isAbsoluteUrl ? imagePath : `/uploads/${filename}`
 
   return (
     <>
